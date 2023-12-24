@@ -17,6 +17,33 @@ class Interface:
             'message': 'What entry do you want?',
             'choices': []
         }
+        self.anime_status =  {
+            'type' : 'list',
+            'name': 'user_option',
+            'message': 'What is the status?',
+            'choices': ['Plan to watch', 'Watching', 'Finished', 'Dropped']           
+        }
+        self.manga_status =  {
+            'type' : 'list',
+            'name': 'user_option',
+            'message': 'What is the status?',
+            'choices': ['Plan to read', 'Reading', 'Finished', 'Dropped']           
+        }
+        self.movie_status =  {
+            'type' : 'list',
+            'name': 'user_option',
+            'message': 'What is the status?',
+            'choices': ['Plan to watch', 'Finished']           
+        }
+        self.score =  {
+            'type' : 'list',
+            'name': 'user_option',
+            'message': 'What is the status?',
+            'choices': ['Favorite', 'Very Good', 'Nice', 'Meh', 'Bad', 'Very Bad']           
+        }
+
+        self.path = r'./Databases' #Path to Databases directory (make sure it exists)        
+        self.status = False
         self.format = False
     
     def AddEntry(self):
@@ -36,13 +63,13 @@ class Interface:
         filtered_data = self.FilterData(media_data, desired_entry)
         
         if self.format == "ANIME": 
-            self.DbWrite(filtered_data, r'.\Databases\Anime.json')
+            self.DbWrite(filtered_data,  self.path + r'/Anime.json')
 
         elif self.format == "MANGA": 
-            self.DbWrite(filtered_data, r'.\Databases\Manga.json')
+            self.DbWrite(filtered_data, self.path + r'/Manga.json')
 
         elif self.format == "MOVIE": 
-            self.DbWrite(filtered_data, r'.\Databases\Movie.json')
+            self.DbWrite(filtered_data, self.path + r'/Movie.json')
 
     def FormatChoice(self) -> list:
         format = prompt(self.format_choice)
@@ -96,12 +123,16 @@ class Interface:
         filtered_entry = entries[choosen_index]
 
         if self.format == 'ANIME':
-            episodes = input('How many episodes have you watched? ')
-            filtered_entry['episode'] = episodes
+            self.status = prompt(self.anime_status)
+            if self.status.get("user_option") != "Plan to watch":
+                episodes = input('How many episodes have you watched? ')
+                filtered_entry['episode'] = episodes
         
         elif self.format == 'MANGA':
-            chapters = input('How many chapters have you read? ')
-            filtered_entry['chapters'] = chapters
+            self.status = prompt(self.manga_status)
+            if self.status.get("user_option") != "Plan to read":
+                chapters = input('How many chapters have you read? ')
+                filtered_entry['chapters'] = chapters
         
         elif self.format == 'MOVIE':
             #get details omitted in the previous dict
@@ -124,7 +155,16 @@ class Interface:
             filtered_entry['title']['brazilian'] = input('Insira o título em português: ')
             filtered_entry['release_date'] = unfiltered_entry['release_date']
             filtered_entry['runtime'] = unfiltered_entry['runtime']
+
+            self.status = prompt(self.movie_status)
         
+        if self.status.get("user_option") not in ["Plan to watch", "Plan to read"]:
+            score = prompt(self.score)
+            filtered_entry['score'] = score['user_option']
+        else:
+            filtered_entry['score'] = False
+
+        filtered_entry['status'] = self.status['user_option']
         filtered_entry['thoughts'] = input('Any final thoughts?\n')
         return filtered_entry
             
