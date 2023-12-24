@@ -27,13 +27,13 @@ class Interface:
             'type' : 'list',
             'name': 'user_option',
             'message': 'What is the status?',
-            'choices': ['Plan to read', 'Reading', 'Finished', 'Dropped']           
+            'choices': ['Reading', 'Finished', 'Dropped', 'Plan to read']           
         }
         self.movie_status =  {
             'type' : 'list',
             'name': 'user_option',
             'message': 'What is the status?',
-            'choices': ['Plan to watch', 'Finished']           
+            'choices': ['Plan to watch', 'Watched']           
         }
         self.score =  {
             'type' : 'list',
@@ -41,12 +41,28 @@ class Interface:
             'message': 'What is the status?',
             'choices': ['Favorite', 'Very Good', 'Nice', 'Meh', 'Bad', 'Very Bad']           
         }
+        self.anime_preset = [
+            {'Reading': []},
+            {'Finished': []},
+            {'Dropped': []},
+            {'Plan to read': []}
+        ]
+        self.manga_preset = [
+            {'Watching': []},
+            {'Finished': []},
+            {'Dropped': []},
+            {'Plan to watch': []}
+        ]
+        self.movie_preset = [
+            {'Plan to watch': []},
+            {'Watched': []}
+        ]
 
         self.path = r'./Databases' #Path to Databases directory (make sure it exists)        
         self.status = False
         self.format = False
     
-    def AddEntry(self):
+    def AddEntry(self) -> None:
         media_data = self.FormatChoice() #chooses the format
         
         # Check for errors in request
@@ -63,13 +79,13 @@ class Interface:
         filtered_data = self.FilterData(media_data, desired_entry)
         
         if self.format == "ANIME": 
-            self.DbWrite(filtered_data,  self.path + r'/Anime.json')
+            self.DbWrite(filtered_data, self.path + r'/anime_db.json', self.anime_preset)
 
         elif self.format == "MANGA": 
-            self.DbWrite(filtered_data, self.path + r'/Manga.json')
+            self.DbWrite(filtered_data, self.path + r'/manga_db.json', self.manga_preset)
 
         elif self.format == "MOVIE": 
-            self.DbWrite(filtered_data, self.path + r'/Movie.json')
+            self.DbWrite(filtered_data, self.path + r'/movie_db.json', self.movie_preset)
 
     def FormatChoice(self) -> list:
         format = prompt(self.format_choice)
@@ -158,39 +174,44 @@ class Interface:
 
             self.status = prompt(self.movie_status)
         
+        # Score and related stuff
         if self.status.get("user_option") not in ["Plan to watch", "Plan to read"]:
             score = prompt(self.score)
             filtered_entry['score'] = score['user_option']
         else:
             filtered_entry['score'] = False
 
-        filtered_entry['status'] = self.status['user_option']
+        self.status = self.status['user_option'] #Make simple string
+        filtered_entry['status'] = self.status
         filtered_entry['thoughts'] = input('Any final thoughts?\n')
         return filtered_entry
-            
-    def DbWrite(self, entry, target_db) -> json:
-        if os.path.exists(target_db):
-            with open(target_db, 'r') as file:
-                data = file.read()
 
-            if os.stat(target_db).st_size != 0:
-                # Remove the trailing ']'
-                data = data.rstrip(']')
-                with open(target_db, 'w') as file:
-                    file.write(data)
-                    file.write(',\n')
-                    json.dump(entry, file, indent=2, ensure_ascii=False)
-                    file.write(']')
-            else:
-                with open(target_db, 'w') as file:
-                    file.write('[')
-                    json.dump(entry, file, indent=2, ensure_ascii=False)
-                    file.write(']')
+    def DbWrite(self, entry: dict, target_db: str, preset: list) -> None:
+        # Check if file already configured, if needed configures it
+        if os.path.exists(target_db) and os.stat(target_db).st_size != 0:
+            with open(target_db, 'r') as file:
+                entry_db = json.load(file)
         else:
+            entry_db = preset
+
+        # Find in which category should be placed the entry
+        index = None
+        for i, db_status in enumerate(entry_db):
+            for key, value in db_status.items():
+                if self.status == key:
+                    index = i
+
+        if index is not None:
+            if self.format == 'MOVIE':
+                entry_db[index][self.status].append({entry['title']['original']: entry})
+
+            else:
+                entry_db[index][self.status].append({entry['title']['romaji']: entry})
+
             with open(target_db, 'w') as file:
-                file.write('[')
-                json.dump(entry, file, indent=2, ensure_ascii=False)
-                file.write(']')
-                
+                json.dump(entry_db, file, indent=2, ensure_ascii=False)
+        else:
+            print(f"Category with status '{self.status}' not found.")
+
 Interface = Interface()
 Interface.AddEntry()
