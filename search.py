@@ -23,12 +23,14 @@ def AnilistData(name:str, media_type:str) -> dict:
                     type
                     genres
                     countryOfOrigin
-                    duration
                     startDate {
                         year
                         month
                         day
                     }
+                    duration
+                    episodes
+                    chapters
                 }
             }
         }
