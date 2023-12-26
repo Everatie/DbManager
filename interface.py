@@ -41,27 +41,28 @@ class Interface:
             'message': 'What is the status?',
             'choices': ['Favorite', 'Very Good', 'Nice', 'Meh', 'Bad', 'Very Bad']           
         }
-        self.anime_preset = [
+        self.anime_preset = {"List": [
             {'Info': {'total_time': 0, 'episodes_watched': 0, 'anime_seen': 0}},
             {'Watching': []},
             {'Finished': []},
             {'Dropped': []},
             {'Plan to watch': []}
-        ]
-        self.manga_preset = [
+        ]}
+
+        self.manga_preset = {"List": [
             {'Info': {'chapters_read': 0, 'manga_read': 0}},
             {'Reading': []},
             {'Finished': []},
             {'Dropped': []},
             {'Plan to watch': []}
-        ]
-        self.movie_preset = [
+        ]}
+        self.movie_preset = {"List": [
             {'Info': {'total_time': 0, 'watched_movies': 0}},
             {'Plan to watch': []},
             {'Watched': []}
-        ]
+        ]} 
 
-        self.path = r'./Databases' #Path to Databases directory (make sure it exists)        
+        self.path = r'../Site/Lists/Databases' #Path to Databases directory (make sure it exists)        
         self.status = False
         self.format = False
     
@@ -102,7 +103,7 @@ class Interface:
         elif format.get("user_option") == "Manga":
             self.format = "MANGA"
 
-            manga_name = input('Please input the name of the desired anime: ').strip()
+            manga_name = input('Please input the name of the desired manga: ').strip()
             return search.AnilistData(manga_name, self.format)["data"]["Page"]["media"] #removes  junk
 
         elif format.get("user_option") == "Movie": 
@@ -115,14 +116,24 @@ class Interface:
             return 'Operation cancelled'
 
     def EntryChoice(self, entries:list) -> int: 
-        # Texts for each type of midia
         if self.format == 'ANIME' or self.format == 'MANGA':
+            # Text
             for entry in entries:
-                entry_text = '{} ({}) -- {}\n'.format(
-                    entry['title']['english'], entry['title']['romaji'],
-                    entry['startDate']['year'])
-                self.entry_choice['choices'].append(entry_text)            
-        
+                # Adaptative text
+                if entry['title']['english'] != None and entry['title']['romaji'] :
+                    entry_text = '{} ({}) -- {}\n'.format(
+                        entry['title']['english'], entry['title']['romaji'],
+                        entry['startDate']['year'])
+                    
+                elif entry['title']['english'] == None:
+                    entry_text = '{} -- {}\n'.format(entry['title']['romaji'],
+                        entry['startDate']['year'])
+                
+                elif entry['title']['english'] == None:
+                    entry_text = '{} -- {}\n'.format(entry['title']['english'],
+                        entry['startDate']['year'])
+                self.entry_choice['choices'].append(entry_text) 
+                       
         elif self.format == 'MOVIE':
             for entry in entries:
                 entry_text = '{} -- {}\n'.format(entry['original_title'], entry['release_date'])
@@ -148,21 +159,28 @@ class Interface:
             if self.status.get("user_option") != "Plan to watch":
                 while True:
                     try:
-                        episodes = int(input('How many episodes have you read? '))
+                        #Adaptaive text
+                        if filtered_entry['episodes'] != None:
+                            episodes = int(input(f'How many episodes have you read? Total of {filtered_entry["episodes"]}  '))
+                        
+                        else:
+                            episodes = int(input(f'How many episodes have you read? '))
+                        
+                        #Response check
                         if filtered_entry['episodes'] != None:
                             if episodes > filtered_entry['episodes']:
                                 print('Please enter a value between 1 and {}.'.format(filtered_entry['episodes']))
                             else: 
-                                filtered_entry['watched_episodes'] = episodes
+                                filtered_entry['episodes_watched'] = episodes
                                 break
                         else:
                             break
 
                     except ValueError:
-                        print('Please enter a valid numerical value for the number of chapters.')
+                        print('Please enter a valid numerical value for the number of episodes.')
             
             else:
-                filtered_entry['watched_episodes'] = 0
+                filtered_entry['episodes_watched'] = 0
 
             #Removing junk
             filtered_entry.pop('chapters')
@@ -173,7 +191,13 @@ class Interface:
             if self.status.get("user_option") != "Plan to read":
                 while True:
                     try:
-                        chapters = int(input('How many chapters have you read? '))
+                        #Adaptaive text
+                        if filtered_entry['episodes'] != None:
+                            chapters = int(input(f'How many chapters have you read? Total of {filtered_entry["chapters"]}  '))
+                        
+                        else:
+                            chapters = int(input(f'How many chapters have you read? '))
+
                         if filtered_entry['chapters'] != None:
                             if chapters > filtered_entry['chapters']:
                                 print('Please enter a value between 1 and {}.'.format(filtered_entry['chapters']))
@@ -209,7 +233,7 @@ class Interface:
                 filtered_entry['countryOfOrigin'].append(unfiltered_entry['production_countries'][i]['name'])
 
             filtered_entry['title']= {}
-            filtered_entry['title']['original'] = unfiltered_entry['original_title']
+            filtered_entry['title']['english'] = unfiltered_entry['original_title']
             filtered_entry['title']['brazilian'] = input('Insira o título em português: ')
             filtered_entry['release_date'] = unfiltered_entry['release_date']
             filtered_entry['runtime'] = unfiltered_entry['runtime']
@@ -238,48 +262,44 @@ class Interface:
 
         # Find in which category should be placed the entry
         index = None
-        for i, db_status in enumerate(entry_db):
+        for i, db_status in enumerate(entry_db['List']):
             for key, value in db_status.items():
                 if self.status == key:
                     index = i
-
+        
         if index is not None:
-            if self.format == 'MOVIE':
-                # Update status
-                self.InfoUpdate(entry, entry_db, 'ADD')
+            # Add entry
+            entry_db["List"][index][self.status].append(entry)
 
-                # Add entry
-                entry_db[index][self.status].append({entry['title']['original']: entry})
-
-            else:
-                #Update status
-                self.InfoUpdate(entry, entry_db, 'ADD')
-
-                # Add entry
-                entry_db[index][self.status].append({entry['title']['romaji']: entry})
+            # Info section_update
+            self.InfoUpdate(entry, entry_db, 'ADD')
 
             # Save to file
-            with open(target_db, 'w') as file:
+            with open(target_db, 'w', encoding='utf-8') as file:
                 json.dump(entry_db, file, indent=2, ensure_ascii=False)
+            
+            print('Succefully written to file')
         else:
             print(f"Category with status '{self.status}' not found.")
+
 
     def InfoUpdate(self, entry:dict, db:dict, action:str):
         if action == 'ADD':
             if self.format == 'ANIME':
+                print(json.dumps(db, indent=2, ensure_ascii=False))
                 time_add = entry['duration']*entry['episodes_watched']
 
-                db[0]['Info']['total_time'] += time_add
-                db[0]['Info']['episodes_watched'] += entry['episodes_watched']
-                db[0]['Info']['anime_seen'] += 1
+                db['List'][0]['Info']['total_time'] += time_add
+                db['List'][0]['Info']['episodes_watched'] += entry['episodes_watched']
+                db['List'][0]['Info']['anime_seen'] += 1
 
             if self.format == 'MANGA':
-                db[0]['Info']['chapters_read'] += entry['chapters_read']
-                db[0]['Info']['manga_read'] += 1
+                db['List'][0]['Info']['chapters_read'] += entry['chapters_read']
+                db['List'][0]['Info']['manga_read'] += 1
 
             if self.format == 'MOVIE':
-                db[0]['Info']['total_time'] += entry['runtime']
-                db[0]['Info']['watched_movies'] += 1
+                db['List'][0]['Info']['total_time'] += entry['runtime']
+                db['List'][0]['Info']['watched_movies'] += 1
 
         if action == 'REMOVE':
             pass
