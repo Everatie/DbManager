@@ -1,6 +1,5 @@
 import requests
 import secret
-import json
 
 def AnilistData(name:str, media_type:str) -> dict:
     url = 'https://graphql.anilist.co'
@@ -28,6 +27,7 @@ def AnilistData(name:str, media_type:str) -> dict:
                         month
                         day
                     }
+                    format
                     duration
                     episodes
                     chapters
