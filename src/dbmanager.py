@@ -23,13 +23,13 @@ class UserInterface:
         'type' : 'list',
         'name': 'user_option',
         'message': 'What is the media_status?',
-        'choices': ['Watching', 'Finished', 'Dropped', 'Plan to watch'] 
+        'choices': ['Watching', 'Watched', 'Dropped', 'Plan to watch'] 
     }
     manga_media_status =  {
         'type' : 'list',
         'name': 'user_option',
         'message': 'What is the media_status?',
-        'choices': ['Reading', 'Finished', 'Dropped', 'Plan to read']           
+        'choices': ['Reading', 'Read', 'Dropped', 'Plan to read']           
     }
 
     movie_media_status =  {
@@ -118,8 +118,18 @@ class UserInterface:
         UserInterface.media_status = UserInterface.media_status['user_option'] #Make simple string
 
     def FinalProcessing(desired_entry:dict, score, thoughts_ignore) -> dict:
-        desired_entry['media_status'] = UserInterface.media_status
         desired_entry['thoughts'] = False
+
+        # Rewatching
+        if UserInterface.media_status in ["Watched", "Watching", "Read", "Reading"]:
+            while True:
+                try:              
+                    times_rewatched = int(input(f'How many times have you seen this?  '))
+                    desired_entry['times_rewatched'] =  times_rewatched
+                    break
+
+                except ValueError:
+                    print('Please enter a valid numerical value!')
 
         # Score
         if score != None:
@@ -131,7 +141,7 @@ class UserInterface:
                 desired_entry['score'] = score['user_option']
             else:
                 desired_entry['score'] = None
-        
+
         # Thoughts
         if thoughts_ignore == True:
             desired_entry['thoughts'] = None
@@ -143,42 +153,15 @@ class UserInterface:
 
 class DataProcessor:
     @staticmethod
-    def AnimeProcessor(desired_entry:dict, episodes_watched) -> dict:
+    def AnimeProcessor(desired_entry:dict, episodes_watched=None) -> dict:
         #Removing junk
         desired_entry.pop('chapters')
+        desired_entry.pop('type')
+        desired_entry["countryOfOrigin"] = DataProcessor.countryFix(desired_entry["countryOfOrigin"])
 
-        #Episodes stuff
-        if episodes_watched != None:
-            desired_entry['episodes_watched'] = episodes_watched
-
-            return desired_entry
-
-        if UserInterface.media_status == "Plan to watch":
-            desired_entry['episodes_watched'] = 0
-            return desired_entry
-
-        while True:
-            try:
-                #Adaptaive text
-                if desired_entry['episodes'] != None:
-                    episodes_watched = int(input(f'How many episodes have you watched? Total of {desired_entry["episodes"]}: '))
-                
-                else:
-                    episodes_watched = int(input(f'How many episodes have you watched? '))
-                
-                #Response check
-                if desired_entry['episodes'] != None:
-                    if episodes_watched > desired_entry['episodes']:
-                        print('Please enter a value between 1 and {}.'.media_format(desired_entry['episodes']))
-                    else: 
-                        desired_entry['episodes_watched'] = episodes_watched
-                        break
-                else:
-                    desired_entry['episodes_watched'] = episodes_watched
-                    break
-
-            except ValueError:
-                print('Please enter a valid numerical value for the number of episodes.')
+        desired_entry["total_episodes"] = desired_entry["episodes"]
+        desired_entry.pop('episodes')
+        desired_entry["episodes_watched"] = DataProcessor.amountInput(episodes_watched, desired_entry["total_episodes"])
 
         return desired_entry
     
@@ -187,40 +170,12 @@ class DataProcessor:
         #Removing junk
         desired_entry.pop('duration')
         desired_entry.pop('episodes')
+        desired_entry.pop('type')
+        desired_entry["countryOfOrigin"] = DataProcessor.countryFix(desired_entry["countryOfOrigin"])
 
-        #Chapters stuff
-        if chapters_read != None:
-            desired_entry['chapters_read'] = chapters_read
-
-            return desired_entry
-
-        elif UserInterface.media_status == "Plan to read":
-                desired_entry['chapters_read'] = 0
-
-                return desired_entry
-        
-        while True:
-            try:
-                #Adaptaive text
-                if desired_entry['chapters'] != None:                    chapters_read = int(input(f'How many chapters have you read? Total of {desired_entry["chapters"]}:  '))
-                
-                else:
-                    chapters_read = int(input(f'How many chapters have you read? '))
-
-                # #Response check
-                if desired_entry['chapters'] != None:
-                    if chapters_read > desired_entry['chapters']:
-                        print('Please enter a value between 1 and {}.'.media_format(desired_entry['chapters']))
-                    else: 
-                        print(chapters_read)
-                        desired_entry['chapters_read'] = chapters_read
-                        break
-                else:
-                    desired_entry['chapters_read'] = chapters_read
-                    break
-
-            except ValueError:
-                print('Please enter a valid numerical value for the number of chapters.')
+        desired_entry["total_chapters"] = desired_entry["chapters"]
+        desired_entry.pop('chapters')
+        desired_entry["chapters_read"] = DataProcessor.amountInput(chapters_read, desired_entry["total_chapters"])
 
         return desired_entry
 
@@ -233,105 +188,123 @@ class DataProcessor:
         filtered_entry = {} # Refresh the filtered
 
         # Add the relevant things
-        filtered_entry['genre'] = []
+        filtered_entry['genres'] = []
         for i in range(len(unfiltered_entry['genres'])):
-            filtered_entry['genre'].append(unfiltered_entry['genres'][i]['name'])
+            filtered_entry['genres'].append(unfiltered_entry['genres'][i]['name'])
 
         filtered_entry['countryOfOrigin'] = []
         for i in range(len(unfiltered_entry['production_countries'])):
             filtered_entry['countryOfOrigin'].append(unfiltered_entry['production_countries'][i]['name'])
 
+        year, month, day = map(int, unfiltered_entry['release_date'].split("-"))
+        filtered_entry['startDate'] = {"year": year, "month": month, "day": day}
+
         filtered_entry['title']= {}
         filtered_entry['title']['english'] = unfiltered_entry['original_title']
-        filtered_entry['title']['brazilian'] = input('Insira o título em português: ')
-        filtered_entry['release_date'] = unfiltered_entry['release_date']
-        filtered_entry['runtime'] = unfiltered_entry['runtime']
+        filtered_entry['title']['portuguese'] = input('Insira o título em português: ')
+        filtered_entry['duration'] = unfiltered_entry['runtime']
 
         return filtered_entry
 
     @staticmethod
-    def InfoUpdate(entry:dict, db:dict, action:str):
-        if action == 'ADD':
-            if UserInterface.media_format == 'ANIME':
-                time_add = entry['duration']*entry['episodes_watched']
+    def countryFix(country:str) -> str:
+        if country == "JP":
+            return "Japan"
+        
+        elif country == "KR":
+            return "Korea"
+        
+        elif country == "ZH":
+            return "China"
 
-                db['List'][0]['Info']['total_time'] += time_add
-                db['List'][0]['Info']['episodes_watched'] += entry['episodes_watched']
-                db['List'][0]['Info']['anime_seen'] += 1
+    def amountInput(amount: int, total) -> None:
+        # Chapters stuff
+        if amount is not None:
+            return amount
+        
+        elif UserInterface.media_status in ["Plan to watch", "Plan to read"] :
+            return 0
 
-            if UserInterface.media_format == 'MANGA':
-                db['List'][0]['Info']['chapters_read'] += entry['chapters_read']
-                db['List'][0]['Info']['manga_read'] += 1
+        if UserInterface.media_status in ["Watched", "Read"] and total != None:
+            return total
 
-            if UserInterface.media_format == 'MOVIE':
-                db['List'][0]['Info']['total_time'] += entry['runtime']
-                db['List'][0]['Info']['watched_movies'] += 1
+        while True:
+            try:
+                # Adaptive text
+                if total is not None:
+                    total_seen = int(input(f'How much have you seen? Total of {total}:  '))
+                else:
+                    total_seen = int(input('How much have you seen? '))
 
-        if action == 'REMOVE':
-            pass
+                # Response check
+                    
+                if total is not None:
+                    if total_seen > int(total):
+                        print(f'Please enter a value between 1 and {total["chapters"]}.')
+                    else:
+                        return total_seen
+                else:
+                    return total_seen
+
+            except ValueError:
+                print('Please enter a valid numerical value!')
 
 class DatabaseHandler:
-    path = r'./Databases' #Path to Databases directory (make sure it exists)  
+    path = r'../Site/Lists/Databases' #Path to Databases directory (make sure it exists)  
 
     #PyInquirer
     anime_preset = {"List": [
-        {'Info': {'total_time': 0, 'episodes_watched': 0, 'anime_seen': 0}},
         {'Watching': []},
-        {'Finished': []},
+        {'Watched': []},
         {'Dropped': []},
         {'Plan to watch': []}
     ]}
 
     manga_preset = {"List": [
-        {'Info': {'chapters_read': 0, 'manga_read': 0}},
         {'Reading': []},
-        {'Finished': []},
+        {'Read': []},
         {'Dropped': []},
         {'Plan to watch': []}
     ]}
     movie_preset = {"List": [
-        {'Info': {'total_time': 0, 'watched_movies': 0}},
-        {'Plan to watch': []},
-        {'Watched': []}
+        {'Watched': []},
+        {'Plan to watch': []}
     ]}
 
     @staticmethod
     def DbWrite(entry: dict, target_db: str, preset: list) -> None:
         # Check if file already configured, if needed configures it
-        if os.path.exists(target_db) and os.stat(target_db).st_size != 0:
-            with open(target_db, 'r', encoding='utf-8') as file:
-                entry_db = json.load(file)
-        else:
-            entry_db = preset
+        try:
+            if os.path.exists(target_db) and os.stat(target_db).st_size != 0:
+                with open(target_db, 'r', encoding='utf-8') as file:
+                    entry_db = json.load(file)
+            else:
+                entry_db = preset
 
-        # Find in which category should be placed the entry
-        index = None
-        for i, db_media_status in enumerate(entry_db['List']):
-            for key, value in db_media_status.items():
-                if UserInterface.media_status == key:
-                    index = i
-        
-        if index is not None:
-            # Add entry
-            entry_db["List"][index][UserInterface.media_status].append(entry)
+            # Find in which category should be placed the entry
+            index = None
+            for i, db_media_status in enumerate(entry_db['List']):
+                for key, value in db_media_status.items():
+                    if UserInterface.media_status == key:
+                        index = i
 
-            # Info section_update
-            DataProcessor.InfoUpdate(entry, entry_db, 'ADD')
+            if index is not None:
+                # Add entry
+                entry_db["List"][index][UserInterface.media_status].append(entry)
 
-            # Save to file
-            with open(target_db, 'w', encoding='utf-8') as file:
-                json.dump(entry_db, file, indent=2, ensure_ascii=False)
-            
-            print('Succefully written to file')
-        else:
-            print(f"Category with media_status '{UserInterface.media_status}' not found.")
+                # Save to file
+                with open(target_db, 'w', encoding='utf-8') as file:
+                    json.dump(entry_db, file, indent=2, ensure_ascii=False)
 
-    def DbLoad(target_db:str) -> dict:
-        if os.path.exists(target_db) and os.stat(target_db).st_size != 0:
-            with open(target_db, 'r', encoding='utf-8') as file:
-                return json.load(file)
-        else:
-            return "Error: file without necessary info!"
+                print('Successfully written to file')
+            else:
+                print(f"Category with media_status '{UserInterface.media_status}' not found.")
+        except FileNotFoundError:
+            print(f"Error: File not found at '{target_db}'.")
+        except json.JSONDecodeError:
+            print(f"Error: JSON decoding issue in file '{target_db}'.")
+        except Exception as e:
+            print(f"An unexpected error occurred: {e}")
 
 class InterfaceManager:
     @staticmethod
@@ -454,9 +427,6 @@ class InterfaceManager:
 
         elif UserInterface.media_format == "MOVIE": 
             DatabaseHandler.DbWrite(filtered_data, DatabaseHandler.path + r'/movie_db.json', DatabaseHandler.movie_preset)
-
-    def RemoveEntry():
-        pass
 
     if __name__ == '__main__':
         UserInterface.cli()
