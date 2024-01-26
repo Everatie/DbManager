@@ -1,5 +1,5 @@
 import requests
-import secret
+import settings
 import json
 
 def AnilistData(name:str, media_type:str) -> dict:
@@ -57,7 +57,7 @@ def MovieSearch(show_name:str) -> object:
 
     headers = {
         "accept": "application/json",
-         "Authorization": f"Bearer {secret.MovieTOKEN}"
+         "Authorization": f"Bearer {settings.MovieTOKEN}"
     }
     # Format the URL with the provided information
     new_url = url.format(show_name.replace(" ", "%20"))
@@ -79,7 +79,7 @@ def MovieData(movie_id:int):
 
     headers = {
         "accept": "application/json",
-        "Authorization": f"Bearer {secret.MovieTOKEN}"
+        "Authorization": f"Bearer {settings.MovieTOKEN}"
     }
 
     new_url = url.format(movie_id)

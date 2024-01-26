@@ -1,7 +1,9 @@
 from PyInquirer import prompt
+import settings
+import datetime
 import search
-import json
 import click
+import json
 import os
 
 class UserInterface:
@@ -12,6 +14,7 @@ class UserInterface:
         'message': 'What entry do you want?',
         'choices': ['Anime', 'Manga', 'Movie', 'Cancel']
     }
+
     entry_choice = {
         'type' : 'list',
         'name': 'user_option',
@@ -23,27 +26,28 @@ class UserInterface:
         'type' : 'list',
         'name': 'user_option',
         'message': 'What is the media_status?',
-        'choices': ['Watching', 'Watched', 'Dropped', 'Plan to watch'] 
+        'choices': ['Watching', 'Watched', 'Paused', 'Dropped', 'PlanToWatch'] 
     }
+
     manga_media_status =  {
         'type' : 'list',
         'name': 'user_option',
         'message': 'What is the media_status?',
-        'choices': ['Reading', 'Read', 'Dropped', 'Plan to read']           
+        'choices': ['Reading', 'Read', 'Paused', 'Dropped', 'PlanToRead']           
     }
 
     movie_media_status =  {
         'type' : 'list',
         'name': 'user_option',
         'message': 'What is the media_status?',
-        'choices': ['Watched', 'Plan to watch']           
+        'choices': ['Watched', 'PlanToWatch']           
     }
 
     score =  {
         'type' : 'list',
         'name': 'user_option',
         'message': 'What is the media_status?',
-        'choices': ['Favorite', 'Very Good', 'Nice', 'Meh', 'Bad', 'Very Bad']           
+        'choices': ['Favorite', 'Excellent', 'Nice', 'Regular', 'Bad', 'Horrible']           
     }
 
     media_status = False
@@ -136,7 +140,7 @@ class UserInterface:
             desired_entry['score'] = score
         
         else:
-            if UserInterface.media_status not in ["Plan to watch", "Plan to read"]:
+            if UserInterface.media_status not in ["PlanToWatch", "Plan to read"]:
                 score = prompt(UserInterface.score)
                 desired_entry['score'] = score['user_option']
             else:
@@ -148,6 +152,11 @@ class UserInterface:
 
         else:
             desired_entry['thoughts'] = input('Any final thoughts?\n')
+        
+        # EntryTime
+        timeNow = datetime.datetime.now()
+        formatted_date = timeNow.strftime("%Y-%m-%d %H:%M:%S")
+        desired_entry["entryDate"] = formatted_date
 
         return desired_entry
 
@@ -159,9 +168,30 @@ class DataProcessor:
         desired_entry.pop('type')
         desired_entry["countryOfOrigin"] = DataProcessor.countryFix(desired_entry["countryOfOrigin"])
 
+        #Episodes
         desired_entry["total_episodes"] = desired_entry["episodes"]
         desired_entry.pop('episodes')
-        desired_entry["episodes_watched"] = DataProcessor.amountInput(episodes_watched, desired_entry["total_episodes"])
+        desired_entry["watched_episodes"] = DataProcessor.amountInput(episodes_watched, desired_entry["total_episodes"])
+
+        #Title fix
+        desired_entry["title"]["originalTitle"] = desired_entry["title"]["romaji"]
+        desired_entry.pop["title"]["romaji"]
+
+        #Title issue fix
+        if desired_entry["title"]["english"] == None:
+            desired_entry["title"]["english"] = desired_entry["title"]["originalTitle"]
+        elif desired_entry["title"]["originalTitle"] == None:
+            desired_entry["title"]["originalTitle"] = desired_entry["title"]["english"]
+        
+        # Release Date fix
+        year = desired_entry["startDate"]["year"]
+        month = desired_entry["startDate"]["month"]
+        day = desired_entry["startDate"]["day"]
+
+        desired_entry.pop("startDate")
+
+        releaseDate = "{}-{}-{}".format(year, month, day)
+        desired_entry["releaseDate"] = releaseDate
 
         return desired_entry
     
@@ -173,9 +203,30 @@ class DataProcessor:
         desired_entry.pop('type')
         desired_entry["countryOfOrigin"] = DataProcessor.countryFix(desired_entry["countryOfOrigin"])
 
+        #Chapters fix
         desired_entry["total_chapters"] = desired_entry["chapters"]
         desired_entry.pop('chapters')
-        desired_entry["chapters_read"] = DataProcessor.amountInput(chapters_read, desired_entry["total_chapters"])
+        desired_entry["read_chapters"] = DataProcessor.amountInput(chapters_read, desired_entry["total_chapters"])
+
+        #Title fix
+        desired_entry["title"]["originalTitle"] = desired_entry["title"]["romaji"]
+        desired_entry.pop["title"]["romaji"]
+
+        #Title issue fix
+        if desired_entry["title"]["english"] == None:
+            desired_entry["title"]["english"] = desired_entry["title"]["originalTitle"]
+        elif desired_entry["title"]["originalTitle"] == None:
+            desired_entry["title"]["originalTitle"] = desired_entry["title"]["english"]
+
+        # Release Date fix
+        year = desired_entry["startDate"]["year"]
+        month = desired_entry["startDate"]["month"]
+        day = desired_entry["startDate"]["day"]
+
+        desired_entry.pop("startDate")
+
+        releaseDate = "{}-{}-{}".format(year, month, day)
+        desired_entry["releaseDate"] = releaseDate
 
         return desired_entry
 
@@ -196,11 +247,10 @@ class DataProcessor:
         for i in range(len(unfiltered_entry['production_countries'])):
             filtered_entry['countryOfOrigin'].append(unfiltered_entry['production_countries'][i]['name'])
 
-        year, month, day = map(int, unfiltered_entry['release_date'].split("-"))
-        filtered_entry['startDate'] = {"year": year, "month": month, "day": day}
+        filtered_entry["ReleaseDate"] = unfiltered_entry['release_date']
 
         filtered_entry['title']= {}
-        filtered_entry['title']['english'] = unfiltered_entry['original_title']
+        filtered_entry['title']['originalTitle'] = unfiltered_entry['original_title']
         filtered_entry['title']['portuguese'] = input('Insira o título em português: ')
         filtered_entry['duration'] = unfiltered_entry['runtime']
 
@@ -214,7 +264,7 @@ class DataProcessor:
         elif country == "KR":
             return "Korea"
         
-        elif country == "ZH":
+        elif country == "CN":
             return "China"
 
     def amountInput(amount: int, total) -> None:
@@ -250,61 +300,86 @@ class DataProcessor:
                 print('Please enter a valid numerical value!')
 
 class DatabaseHandler:
-    path = r'../Site/Lists/Databases' #Path to Databases directory (make sure it exists)  
+ #Path to Databases directory (make sure it exists)  
 
     #PyInquirer
-    anime_preset = {"List": [
+    anime_preset = {"ANIME": [
         {'Watching': []},
         {'Watched': []},
+        {'Paused': []},
         {'Dropped': []},
         {'Plan to watch': []}
     ]}
 
-    manga_preset = {"List": [
+    manga_preset = {"MANGA": [
         {'Reading': []},
         {'Read': []},
         {'Dropped': []},
         {'Plan to watch': []}
     ]}
-    movie_preset = {"List": [
+
+    movie_preset = {"MOVIE": [
         {'Watched': []},
         {'Plan to watch': []}
     ]}
 
     @staticmethod
-    def DbWrite(entry: dict, target_db: str, preset: list) -> None:
-        # Check if file already configured, if needed configures it
-        try:
-            if os.path.exists(target_db) and os.stat(target_db).st_size != 0:
-                with open(target_db, 'r', encoding='utf-8') as file:
-                    entry_db = json.load(file)
-            else:
-                entry_db = preset
+    def DbWrite(entryData: dict, fileName: str, preset: list) -> None:
+        folderPath = settings.folderPath
+        targetDbPath = os.path.join(folderPath, fileName)
 
-            # Find in which category should be placed the entry
-            index = None
-            for i, db_media_status in enumerate(entry_db['List']):
-                for key, value in db_media_status.items():
-                    if UserInterface.media_status == key:
-                        index = i
+        # Check if git is initialized
+        gitPath = os.path.join(folderPath, '.git')
+        if not os.path.exists(gitPath):
+            os.system("git init Databases")
+            os.system("git push -u origin main")
 
-            if index is not None:
-                # Add entry
-                entry_db["List"][index][UserInterface.media_status].append(entry)
+        # Change to the folder directory (solve git related issues)
+        os.chdir(folderPath)
 
-                # Save to file
-                with open(target_db, 'w', encoding='utf-8') as file:
-                    json.dump(entry_db, file, indent=2, ensure_ascii=False)
+        # Check if desired file is blank
+        if os.path.exists(targetDbPath) and os.stat(targetDbPath).st_size == 0:
+            os.remove(targetDbPath)
 
-                print('Successfully written to file')
-            else:
-                print(f"Category with media_status '{UserInterface.media_status}' not found.")
-        except FileNotFoundError:
-            print(f"Error: File not found at '{target_db}'.")
-        except json.JSONDecodeError:
-            print(f"Error: JSON decoding issue in file '{target_db}'.")
-        except Exception as e:
-            print(f"An unexpected error occurred: {e}")
+        # If file doesn't exist, create a new one
+        if not os.path.exists(targetDbPath):
+            # Create a new file
+            with open(targetDbPath, 'w', encoding='utf-8') as file:
+                json.dump(preset, file, indent=2, ensure_ascii=False)
+
+            # Commit changes
+            os.system("git add .")
+            os.system(f'git commit -m "{list(preset.keys())[0]} database creation"')
+
+        # Open file
+        with open(targetDbPath, 'r', encoding='utf-8') as file:
+            entry_db = json.load(file)
+
+        # Find in which category should be placed the entry
+        index = None
+        for i, db_media_status in enumerate(entry_db[UserInterface.media_format]):
+            for key, value in db_media_status.items():
+                if UserInterface.media_status == key:
+                    index = i
+
+        if index is not None:
+            # Add entry
+            entry_db[UserInterface.media_format][index][UserInterface.media_status].append(entryData)
+
+            # Save to file
+            with open(targetDbPath, 'w', encoding='utf-8') as file:
+                json.dump(entry_db, file, indent=2, ensure_ascii=False)
+
+            # Commit changes
+            os.system("git add .")
+            os.system(f'git commit -m "{entryData["title"]["originalTitle"]} added to database"')
+            os.system("git push origin main")            
+
+            print('Successfully written to file')
+
+        else:
+            print(f"Category with media_status '{UserInterface.media_status}' not found.")
+
 
 class InterfaceManager:
     @staticmethod
@@ -410,23 +485,25 @@ class InterfaceManager:
         # Data filtering
         if UserInterface.media_format == 'ANIME':
             filtered_data = DataProcessor.AnimeProcessor(desired_entry, amount)
-        
+            db_file = 'animeDb.json'
+            preset = DatabaseHandler.anime_preset
+
         elif UserInterface.media_format == 'MANGA':
             filtered_data = DataProcessor.MangaProcessor(desired_entry, amount)
-        
+            db_file = 'mangaDb.json'
+            preset = DatabaseHandler.manga_preset
+
         elif UserInterface.media_format == 'MOVIE':
             filtered_data = DataProcessor.MovieProcessor(desired_entry)
+            db_file = 'movieDb.json'
+            preset = DatabaseHandler.movie_preset
+        else:
+            print("Invalid media_format!")
+            return "Error: Invalid media_format"
 
         filtered_data = UserInterface.FinalProcessing(filtered_data, score, thoughts_ignore)
         
-        if UserInterface.media_format == "ANIME": 
-            DatabaseHandler.DbWrite(filtered_data, DatabaseHandler.path + r'/anime_db.json', DatabaseHandler.anime_preset)
-
-        elif UserInterface.media_format == "MANGA": 
-            DatabaseHandler.DbWrite(filtered_data, DatabaseHandler.path + r'/manga_db.json', DatabaseHandler.manga_preset)
-
-        elif UserInterface.media_format == "MOVIE": 
-            DatabaseHandler.DbWrite(filtered_data, DatabaseHandler.path + r'/movie_db.json', DatabaseHandler.movie_preset)
+        DatabaseHandler.DbWrite(filtered_data, db_file, preset)
 
     if __name__ == '__main__':
         UserInterface.cli()

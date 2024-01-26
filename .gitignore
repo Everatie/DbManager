@@ -1,2 +1,3 @@
+/venv/
 /Databases/*
-secret.py
+settings.py
