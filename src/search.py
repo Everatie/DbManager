@@ -8,6 +8,7 @@ TMDB_HEADERS = {
     "accept": "application/json",
     "Authorization": f"Bearer {settings.MovieTOKEN}"
 }
+GOOGLE_BOOKS_API_URL = 'https://www.googleapis.com/books/v1/volumes?q={}'
 
 def fetch_data(url, headers=None, payload=None):
     if payload:
@@ -60,3 +61,15 @@ def MovieSearch(show_name: str) -> dict:
 def MovieData(movie_id: int) -> dict:
     url = f"{TMDB_BASE_URL}/movie/{movie_id}"
     return fetch_data(url, headers=TMDB_HEADERS)
+
+def TVShowSearch(show_name: str) -> dict:
+    url = f"{TMDB_BASE_URL}/search/tv?query={show_name.replace(' ', '%20')}&include_adult=true&page=1"
+    return fetch_data(url, headers=TMDB_HEADERS)
+
+def TVShowData(tv_show_id: int) -> dict:
+    url = f"{TMDB_BASE_URL}/tv/{tv_show_id}"
+    return fetch_data(url, headers=TMDB_HEADERS)
+
+def BookSearch(book_name: str) -> dict:
+    url = GOOGLE_BOOKS_API_URL.format(book_name.replace(' ', '+'))
+    return fetch_data(url)
