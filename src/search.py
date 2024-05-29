@@ -1,18 +1,28 @@
 import requests
 import settings
-import json
 
-def AnilistData(name:str, media_type:str) -> dict:
-    url = 'https://graphql.anilist.co'
+# Base URLs and headers
+ANILIST_URL = 'https://graphql.anilist.co'
+TMDB_BASE_URL = 'https://api.themoviedb.org/3'
+TMDB_HEADERS = {
+    "accept": "application/json",
+    "Authorization": f"Bearer {settings.MovieTOKEN}"
+}
 
-    id_parameters = {
-        'query': name,  # Media name --> String
-        'format': media_type,  # Either ANIME or MANGA
-        'page': 1,  # Amount of pages to retrieve data
-        'perpage': 3  # Items per page
-    }
+def fetch_data(url, headers=None, payload=None):
+    if payload:
+        response = requests.post(url, json=payload, headers=headers)
+    else:
+        response = requests.get(url, headers=headers)
+    
+    if response.status_code == 200:
+        return response.json()
+    else:
+        print(f"Error: {response.status_code}, {response.text}")
+        return {'error': f"Error: {response.status_code}, {response.text}"}
 
-    query = """\
+def AnilistData(name: str, media_type: str) -> dict:
+    query = """
         query ($query: String, $format: MediaType, $page: Int, $perpage: Int) {
             Page (page: $page, perPage: $perpage) {
                 media (search: $query, type: $format) {
@@ -35,63 +45,18 @@ def AnilistData(name:str, media_type:str) -> dict:
             }
         }
     """
-    # The duration part is purged during the FilterData() on interface.py
-    response = requests.post(url, json={'query': query, 'variables': id_parameters})
-
-    # Check if the request was successful (status code 200)
-    if response.status_code == 200:
-        if isinstance(response, str):  # Check if entry_data is a string
-            return {'error':'Desired content not found'}
-
-        # Extract the JSON content from the response
-        json_content = response.json()
-        return json_content
-    
-    else:
-        # Print the error message if the request was not successful
-        print(f"Error: {response.status_code}, {response.text}")
-        return {'error': f"Error: {response.status_code}, {response.text}"}
-
-def MovieSearch(show_name:str) -> object:
-    url = "https://api.themoviedb.org/3/search/movie?query={}&include_adult=true&page=1"
-
-    headers = {
-        "accept": "application/json",
-         "Authorization": f"Bearer {settings.MovieTOKEN}"
+    variables = {
+        'query': name,
+        'format': media_type,
+        'page': 1,
+        'perpage': 3
     }
-    # Format the URL with the provided information
-    new_url = url.format(show_name.replace(" ", "%20"))
+    return fetch_data(ANILIST_URL, payload={'query': query, 'variables': variables})
 
-    response = requests.get(new_url, headers=headers)
+def MovieSearch(show_name: str) -> dict:
+    url = f"{TMDB_BASE_URL}/search/movie?query={show_name.replace(' ', '%20')}&include_adult=true&page=1"
+    return fetch_data(url, headers=TMDB_HEADERS)
 
-    # Check if the request was successful (status code 200)
-    if response.status_code == 200:
-        json_content = response.json()
-        return json_content
-    
-    else:
-        # Print the error message if the request was not successful
-        print(f"Error: {response.status_code}, {response.text}")
-        return {'error': f"Error: {response.status_code}, {response.text}"}
-
-def MovieData(movie_id:int):
-    url = "https://api.themoviedb.org/3/movie/{}"
-
-    headers = {
-        "accept": "application/json",
-        "Authorization": f"Bearer {settings.MovieTOKEN}"
-    }
-
-    new_url = url.format(movie_id)
-
-    response = requests.get(new_url, headers=headers) 
-
-    # Check if the request was successful (status code 200)
-    if response.status_code == 200:
-        json_content = response.json()
-        return json_content
-    
-    else:
-        # Print the error message if the request was not successful
-        print(f"Error: {response.status_code}, {response.text}")
-        return {'error': f"Error: {response.status_code}, {response.text}"}
+def MovieData(movie_id: int) -> dict:
+    url = f"{TMDB_BASE_URL}/movie/{movie_id}"
+    return fetch_data(url, headers=TMDB_HEADERS)
